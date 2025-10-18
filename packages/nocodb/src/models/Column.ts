@@ -237,25 +237,6 @@ export default class Column<T = any> implements ColumnType {
       } else {
         insertObj.uidt = UITypes.SingleLineText;
       }
-
-      // Handle TrackModifications column type - set appropriate data type
-      if ((insertObj.uidt as string) === 'TrackModifications') {
-        // Set appropriate data type based on the column options
-        const updateType = column.colOptions?.updateType || 'timestamp';
-        switch (updateType) {
-          case 'timestamp':
-            insertObj.dt = 'timestamp';
-            break;
-          case 'user':
-            insertObj.dt = 'varchar(255)';
-            break;
-          case 'custom':
-            insertObj.dt = 'text';
-            break;
-          default:
-            insertObj.dt = 'varchar(255)';
-        }
-      }
     }
 
     const row = await ncMeta.metaInsert2(
@@ -351,7 +332,9 @@ export default class Column<T = any> implements ColumnType {
         );
         break;
       }
-      case 'TrackModifications': {
+      case UITypes.LastModifiedBy:
+      case UITypes.LastModifiedTime:
+      {
         // Handle TrackModifications column type
         if (column.colOptions?.triggerColumns?.length > 0) {
           await TrackModificationsColumn.insert(
@@ -666,6 +649,12 @@ export default class Column<T = any> implements ColumnType {
           res = await AIColumn.read(context, this.id, ncMeta);
         }
         break;
+      case UITypes.LastModifiedTime:
+      case UITypes.LastModifiedBy:
+        if (this.column_name && !this.system) {
+          res = await TrackModificationsColumn.read(context, this.id, ncMeta);
+        }
+        break;
       // default:
       //   res = await DbColumn.read(this.id);
       //   break;
@@ -948,14 +937,6 @@ export default class Column<T = any> implements ColumnType {
         await beforeRelatedColumnDelete?.(context, barcodeCol.fk_column_id);
         await Column.delete(context, barcodeCol.fk_column_id, ncMeta);
         await afterRelatedColumnDelete?.(context, barcodeCol.fk_column_id);
-      }
-    }
-
-    // Handle TrackModifications columns - delete trigger column relationships
-    if ((col.uidt as string) === 'TrackModifications') {
-      const trackModConfigs = await TrackModificationsColumn.getByColumnId(context, id, ncMeta);
-      for (const config of trackModConfigs) {
-        await TrackModificationsColumn.delete(context, config.id, ncMeta);
       }
     }
 
@@ -1681,28 +1662,6 @@ export default class Column<T = any> implements ColumnType {
       if (typeof column.validate === 'string')
         updateObj.validate = column.validate;
       else updateObj.validate = JSON.stringify(column.validate);
-    }
-
-    // Handle TrackModifications column type - update data type if needed
-    if ((column.uidt as string) === 'TrackModifications') {
-      const updateType = column.colOptions?.updateType || 'timestamp';
-      let newDataType = 'varchar(255)';
-      
-      switch (updateType) {
-        case 'timestamp':
-          newDataType = 'timestamp';
-          break;
-        case 'user':
-          newDataType = 'varchar(255)';
-          break;
-        case 'custom':
-          newDataType = 'text';
-          break;
-        default:
-          newDataType = 'varchar(255)';
-      }
-      
-      updateObj.dt = newDataType;
     }
 
     // get qr code columns and delete if target type is not supported by QR code column type
